@@ -93,6 +93,8 @@ if __name__ == '__main__':
                                         task_scope = task)
     training_threads.append(training_thread)
 
+
+
    
   # prepare session
   sess = tf.Session(config=tf.ConfigProto(log_device_placement=False,
@@ -150,9 +152,11 @@ if __name__ == '__main__':
     print(">>> global step set: {}".format(global_t))
   else:
     print("Could not find old checkpoint")
+ 
 
   def train_function(parallel_index):
     global global_t
+
     training_thread = training_threads[parallel_index] #get the pre assigned trainign thread
     last_global_t = 0
     
@@ -160,7 +164,8 @@ if __name__ == '__main__':
     key = scene + "-" + task
 
 
-    while global_t <= MAX_TIME_STEP and not stop_requested:
+    while global_t <= MAX_TIME_STEP and not stop_requested: #max time step is 10000000.0
+      
       diff_global_t = training_thread.process(sess, global_t, summary_writer, #each threat with dedicated scene and task
                                               summary_op[key], summary_placeholders[key])
       global_t += diff_global_t
@@ -188,12 +193,15 @@ if __name__ == '__main__':
   for t in train_threads:
     t.start()
 
+
+
   print('Press Ctrl+C to stop.')
   signal.pause()
 
   # wait for all threads to finish
   for t in train_threads:
     t.join()
+ 
 
   
 

@@ -29,6 +29,9 @@ class ActorCriticNetwork(object):
       self.td = tf.placeholder("float", [None])
 
 
+      self.r = tf.placeholder("float", [None])
+
+
       ########################################## -Returns 
       self.Returns=tf.placeholder("float", [None])
       self.Advantages=tf.placeholder("float", [None])
@@ -45,30 +48,45 @@ class ActorCriticNetwork(object):
       value_pi=self.v[scope_key]
       old_value_pi=self.v_old[scope_key_old]
       vpredclipped = old_value_pi + tf.clip_by_value(value_pi - old_value_pi, - 0.2, 0.2)
-      vf_losses1 = tf.square(self.v[scope_key] - self.Returns) 
-      vf_losses2 = tf.square(vpredclipped - self.Returns)
+      vf_losses1 = tf.square(self.v[scope_key] - self.r) 
+      vf_losses2 = tf.square(vpredclipped - self.r)
       vf_loss = .5 * tf.reduce_mean(tf.maximum(vf_losses1, vf_losses2)) #This is the vf loss
       ######################################################################
 
+      cur_pi=tf.reduce_sum(tf.multiply(log_pi, self.a), axis=1)
+      old_pi=tf.reduce_sum(tf.multiply(log_pi_old, self.a), axis=1)
 
 
+
+      ratio = tf.exp(cur_pi - old_pi)
+      pg_losses = self.td * ratio #sourragete loss unclipeed
+      pg_losses2 = self.td * tf.clip_by_value(ratio, 1.0 - 0.2, 1.0 + 0.2) #clipped
+      pg_loss = tf.reduce_mean(tf.minimum(pg_losses, pg_losses2))
+      #approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC)) #this is some kind of an approximation
+
+      #clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
 
 
       # policy entropy
       entropy = -tf.reduce_sum(self.pi[scope_key] * log_pi, axis=1)
 
       # policy loss (output)
-      policy_loss = - tf.reduce_sum(tf.reduce_sum(tf.multiply(log_pi, self.a), axis=1) * self.td + entropy * entropy_beta)
+      #policy_loss = - tf.reduce_sum(tf.reduce_sum(tf.multiply(log_pi, self.a), axis=1) * self.td + entropy * entropy_beta)
+      
 
+      policy_loss = -tf.reduce_sum(pg_loss+ entropy * entropy_beta)
       # R (input for value)
-      self.r = tf.placeholder("float", [None])
+      
 
       # value loss (output)
       # learning rate for critic is half of actor's
-      value_loss = 0.5 * tf.nn.l2_loss(self.r - self.v[scope_key]) #this is shared paramters so we can use them in both
+
+      #value_loss = 0.5 * tf.nn.l2_loss(self.r - self.v[scope_key]) #this is shared paramters so we can use them in both
+      #value_loss = 0.5 * tf.nn.l2_loss(self.Returns - self.v[scope_key])
 
       # gradienet of policy and value are summed up
-      self.total_loss = policy_loss + value_loss
+      #self.total_loss = policy_loss + value_loss
+      self.total_loss = policy_loss + vf_loss
 
   def run_policy_and_value(self, sess, s_t, task):
     raise NotImplementedError()
@@ -84,6 +102,10 @@ class ActorCriticNetwork(object):
 
   def get_vars(self):
     raise NotImplementedError()
+
+  def  sync_curre_old(self):
+    raise NotImplementedError()
+
 
   def sync_from(self, src_netowrk, name=None):
     src_vars = src_netowrk.get_vars() #Master net - This is the common networ
@@ -115,34 +137,30 @@ class ActorCriticNetwork(object):
 
 
 
-
-
-
-
-  def sync_curre_old(self, src_netowrk, name=None):
+  def sync_curre_old(self):
 
     current_parms = self.get_vars() #Slave - current thread
     Old_net_params= self.get_vars_old() #get the PPO loss have to keep the an old network
 
 
-    curr_var_names = [self._local_var_name(x) for x in current_parms]
+
+    curr_var_names = [self._local_var_name(x) for x in current_parms]    
     old_var_names = [self._local_var_name(x) for x in Old_net_params]
 
 
     # keep only variables from both src and dst
-    curr_var_names = [x for x in curr_var_names
+    curr_var = [x for x in current_parms
       if self._local_var_name(x) in old_var_names]
-    old_var_names = [x for x in old_var_names
+    old_var = [x for x in Old_net_params
       if self._local_var_name(x) in curr_var_names]
-
 
 
 
     sync_ops_old_n = []  #This is sync_ops
 
     with tf.device(self._device):
-      with tf.name_scope(name, "PPO_old", []) as name:
-        for(src_var, dst_var) in zip(curr_var_names, old_var_names): 
+      with tf.name_scope("PPO_old", []) as name:
+        for(src_var, dst_var) in zip(curr_var, old_var): 
           sync_op = tf.assign(dst_var, src_var)  #apply the updated Master network variables to the slave network variables
           sync_ops_old_n.append(sync_op)
 
