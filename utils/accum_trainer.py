@@ -52,7 +52,6 @@ class AccumTrainer(object):
       with tf.name_scope(name, self._name, []) as name: #AccumTrainer this is the name 
         for var, grad, accum_grad in zip(self._var_list, self._grad_list, self._accum_grad_list): #assign the gradeints to the dedicated gradients variables
           with tf.name_scope("accum_" + var.op.name):
-
             accumulate_ops.append( tf.assign_add(accum_grad, grad) )#This operation outputs "ref" after the update is done. This makes it easier to chain operations that need to use the reset value.
         return tf.group(*accumulate_ops, name=name) #Create an op that groups multiple operations. 
 
