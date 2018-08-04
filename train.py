@@ -11,10 +11,12 @@ import random
 import os
 
 from network import ActorCriticFFNetwork
+from discrim import Discriminator_WGAN
 from training_thread import A3CTrainingThread
 
 from utils.ops import log_uniform
 from utils.rmsprop_applier import RMSPropApplier
+from utils.rmsprop_applier_d import RMSPropApplier_d
 
 from constants import ACTION_SIZE
 from constants import PARALLEL_SIZE
@@ -56,6 +58,14 @@ if __name__ == '__main__':
                                         network_scope = network_scope,
                                         scene_scopes = scene_scopes)
 
+
+  
+  global_discriminator = Discriminator_WGAN(action_size = ACTION_SIZE, #get all the scene_scopes 
+                                        device = device,
+                                        network_scope = network_scope,
+                                        scene_scopes = scene_scopes)
+  
+
   branches = []
 
  
@@ -76,6 +86,12 @@ if __name__ == '__main__':
                                 epsilon = RMSP_EPSILON,
                                 clip_norm = GRAD_NORM_CLIP,
                                 device = device)
+  grad_applier_discriminator = RMSPropApplier_d(learning_rate = learning_rate_input,
+                                decay = RMSP_ALPHA,
+                                momentum = 0.0,
+                                epsilon = RMSP_EPSILON,
+                                clip_norm = GRAD_NORM_CLIP,
+                                device = device)
 
   # instantiate each training thread
   # each thread is training for one target in one scene
@@ -84,14 +100,18 @@ if __name__ == '__main__':
   for i in range(PARALLEL_SIZE):  #each local network has dedicated scene and a target 
     scene, task = branches[i%NUM_TASKS]
 
-    training_thread = A3CTrainingThread(i, global_network, initial_learning_rate, #each thread trained of seperate secene and task
+    training_thread = A3CTrainingThread(i, global_network,global_discriminator, initial_learning_rate, #each thread trained of seperate secene and task
                                         learning_rate_input,
-                                        grad_applier, MAX_TIME_STEP,
+                                        grad_applier,grad_applier_discriminator, MAX_TIME_STEP,
                                         device = device,
                                         network_scope = "thread-%d"%(i+1),
                                         scene_scope = scene,
                                         task_scope = task)
     training_threads.append(training_thread)
+
+  
+
+  pdb.set_trace()
 
 
 

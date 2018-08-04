@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
 import numpy as np
+from tensorflow.python.ops import embedding_ops
 import pdb
 
 # Actor-Critic Network Base Class
